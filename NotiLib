@@ -1,0 +1,112 @@
+
+local RunService = game:GetService("RunService")
+
+local NotifyLib = {}
+NotifyLib.__index = NotifyLib
+
+NotifyLib.Config = {
+    Anchor = Vector2.new(800, 923), 
+    Spacing = 28,
+    FadeInTime = 0.25,
+    FadeOutTime = 0.15,
+    SlideDistance = 220,
+    TextSize = 16,
+    Font = 2,
+}
+
+NotifyLib.Active = {}
+
+
+local function Lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+
+function NotifyLib:Notify(text, duration)
+    duration = duration or 1.6
+
+    local anchor = self.Config.Anchor
+    local startX = anchor.X - self.Config.SlideDistance
+
+
+    local prefix = Drawing.new("Text")
+    prefix.Text = "HO"
+    prefix.Color = Color3.fromRGB(255, 60, 60)
+    prefix.Size = self.Config.TextSize
+    prefix.Font = self.Config.Font
+    prefix.Outline = true
+    prefix.Center = false
+    prefix.Transparency = 0
+    prefix.Visible = true
+    local body = Drawing.new("Text")
+    body.Text = " - Lympia > " .. text
+    body.Color = Color3.fromRGB(255, 255, 255)
+    body.Size = self.Config.TextSize
+    body.Font = self.Config.Font
+    body.Outline = true
+    body.Center = false
+    body.Transparency = 0
+    body.Visible = true
+
+    local notif = {
+        Prefix = prefix,
+        Body = body,
+        StartTime = tick(),
+        Alpha = 0,
+        Removing = false,
+        RemoveTime = 0,
+        X = startX,
+        Y = anchor.Y,
+    }
+
+
+    table.insert(self.Active, 1, notif)
+local connection
+    connection = RunService.RenderStepped:Connect(function()
+        local now = tick()
+
+        if not table.find(self.Active, notif) then
+            connection:Disconnect()
+            return
+        end
+
+        local elapsed = now - notif.StartTime
+
+    
+        if elapsed < self.Config.FadeInTime then
+            local t = elapsed / self.Config.FadeInTime
+            notif.Alpha = Lerp(0, 1, t)
+            notif.X = Lerp(startX, anchor.X, t)
+
+    
+        elseif elapsed < duration then
+            notif.Alpha = 1
+            notif.X = anchor.X
+
+   
+        else
+            if not notif.Removing then
+                notif.Removing = true
+                notif.RemoveTime = now
+            end
+            local t = (now - notif.RemoveTime) / self.Config.FadeOutTime
+            if t >= 1 then
+                prefix:Remove()
+                body:Remove()
+                table.remove(self.Active, table.find(self.Active, notif))
+                connection:Disconnect()
+                return
+            end
+            notif.Alpha = Lerp(1, 0, t)
+            notif.X = Lerp(anchor.X, anchor.X + self.Config.SlideDistance, t)
+        end
+        for i, v in ipairs(self.Active) do
+            local targetY = anchor.Y - (i - 1) * self.Config.Spacing
+            v.Y = Lerp(v.Y, targetY, 0.18)
+            v.Prefix.Position = Vector2.new(v.X, v.Y)
+            v.Body.Position = Vector2.new(v.X + v.Prefix.TextBounds.X, v.Y)
+            v.Prefix.Transparency = v.Alpha
+            v.Body.Transparency = v.Alpha
+        end
+    end)
+end; return NotifyLib
