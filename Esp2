@@ -1,0 +1,296 @@
+local a = {
+    MasterSwitch = false,
+    BoxEnabled = false,
+    BoxColor = Color3.fromRGB(247,36,117),
+    BoxThickness = 1,
+    NameColor = Color3.fromRGB(247,36,117),
+    TracerColor = Color3.fromRGB(247,36,117),
+    BoxStaticXFactor = 1,
+    BoxStaticYFactor = 2,
+    CharacterOffset = CFrame.new(0,-0.25,0),
+    MaxDistance = 1000,
+    TracerEnabled = false,
+    NameEnabled = false,
+    HighlightClosestPlayer = false,
+    TeamCheck = false,
+    EnemyColor = Color3.fromRGB(255,0,0),
+    AllyColor = Color3.fromRGB(0,255,0),
+    BeastCheck = false,
+    BeastColor = Color3.fromRGB(255,165,0),
+    HighlightP = false,
+    OutlinesEnabled = true,
+    CornerSize = 1,
+    CornerThickness = 2,
+    ViewTracerEnabled = false,
+    ViewTracerLength = 10,
+    BoxMode = "Both", -- "Full", "Corners", "Both"
+
+    -- Trail ESP
+    TrailEnabled = false,
+    TrailLifetime = 0.5,
+    TrailMinWidth = 0.5,
+    TrailMaxWidth = 1,
+    TrailTransparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0), NumberSequenceKeypoint.new(1,1)}),
+    TrailHeightOffset = 1
+}
+getgenv().ESP = a
+
+local b = workspace.CurrentCamera
+local c = game:GetService("RunService")
+local d = game:GetService("Players")
+local e = d.LocalPlayer
+local f = e:GetMouse()
+local g = {}
+
+local function j(k)
+    local l,m=b:WorldToViewportPoint(k.Position)
+    return Vector2.new(l.X,l.Y),m and l.Z>0,l.Z
+end
+
+local function n(o)
+    return o:FindFirstChild("Hammer")~=nil
+end
+
+local function p()
+    local q,r=nil,math.huge
+    for _,t in ipairs(d:GetPlayers()) do
+        if t~=e and t.Character then
+            local u=t.Character:FindFirstChild("HumanoidRootPart")
+            local v=t.Character:FindFirstChild("Humanoid")
+            if u and v and v.Health>0 then
+                local l,w=b:WorldToViewportPoint(u.Position)
+                if w then
+                    local x=(Vector2.new(l.X,l.Y)-Vector2.new(f.X,f.Y)).Magnitude
+                    if x<r then r=x;q=t end
+                end
+            end
+        end
+    end
+    return q
+end
+
+--================ ESP CLASS =================--
+local y = {}
+y.__index = y
+
+function y.new(t)
+    local self=setmetatable({},y)
+    self.Player=t
+
+    -- Box Lines
+    self.BoxLines={}
+    for i=1,4 do
+        local L=Drawing.new("Line")
+        L.Thickness=a.BoxThickness
+        self.BoxLines[i]=L
+    end
+
+    -- Corners
+    self.Corners={}
+    self.CornerOutlines={}
+    for i=1,8 do
+        local O=Drawing.new("Line")
+        O.Thickness=a.CornerThickness+2
+        O.Color=Color3.new(0,0,0)
+        O.ZIndex=0
+        self.CornerOutlines[i]=O
+
+        local L=Drawing.new("Line")
+        L.Thickness=a.CornerThickness
+        self.Corners[i]=L
+    end
+
+    -- Name
+    self.Name=Drawing.new("Text")
+    self.Name.Size=15
+    self.Name.Center=true
+    self.Name.Outline=true
+
+    -- Tracers
+    self.TracerOutline=Drawing.new("Line")
+    self.TracerOutline.Thickness=a.BoxThickness+2
+    self.TracerOutline.Color=Color3.new(0,0,0)
+    self.TracerOutline.ZIndex=0
+    self.Tracer=Drawing.new("Line")
+    self.Tracer.Thickness=a.BoxThickness
+
+    -- View Tracer
+    self.ViewTracer=Drawing.new("Line")
+    self.ViewTracer.Thickness=a.BoxThickness
+    self.ViewTracer.Color=a.BoxColor
+    self.ViewTracer.Visible=false
+
+    -- Highlight
+    self.Highlight=Instance.new("Highlight")
+    self.Highlight.Adornee=nil
+    self.Highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+    self.Highlight.FillTransparency=0.5
+    self.Highlight.OutlineTransparency=0
+    self.Highlight.Parent=game:GetService("CoreGui")
+
+    -- Trail ESP
+    self.Att0=Instance.new("Attachment")
+    self.Att1=Instance.new("Attachment")
+    self.Trail=Instance.new("Trail")
+    self.Trail.FaceCamera=true
+    self.Trail.LightEmission=0.5
+    self.Trail.Transparency=a.TrailTransparency
+    self.Trail.Lifetime=a.TrailLifetime
+    self.Trail.WidthScale=NumberSequence.new({
+        NumberSequenceKeypoint.new(0,a.TrailMaxWidth),
+        NumberSequenceKeypoint.new(1,a.TrailMinWidth)
+    })
+    self.Trail.Enabled=false
+
+    return self
+end
+
+function y:SetVisible(v)
+    local fullVisible=v and a.BoxEnabled and (a.BoxMode=="Full" or a.BoxMode=="Both")
+    local cornersVisible=v and a.BoxEnabled and (a.BoxMode=="Corners" or a.BoxMode=="Both")
+    for i=1,8 do
+        self.Corners[i].Visible=cornersVisible
+        self.CornerOutlines[i].Visible=cornersVisible and a.OutlinesEnabled
+    end
+    for i=1,4 do self.BoxLines[i].Visible=fullVisible end
+    self.Name.Visible=v and a.NameEnabled
+    self.Name.Outline=a.OutlinesEnabled
+    self.Tracer.Visible=v and a.TracerEnabled
+    self.TracerOutline.Visible=v and a.TracerEnabled and a.OutlinesEnabled
+    self.ViewTracer.Visible=v and a.ViewTracerEnabled
+    self.Highlight.Enabled=v and a.HighlightP
+    self.Trail.Enabled=v and a.TrailEnabled
+end
+
+function y:Update()
+    local C=self.Player.Character
+    if not C then return self:SetVisible(false) end
+    local u=C:FindFirstChild("HumanoidRootPart")
+    local v=C:FindFirstChild("Humanoid")
+    if not u or not v or v.Health<=0 then return self:SetVisible(false) end
+    local D=(b.CFrame.Position-u.Position).Magnitude
+    if D>a.MaxDistance then return self:SetVisible(false) end
+
+    local l,m,E=j(u.CFrame*a.CharacterOffset)
+    if not m then return self:SetVisible(false) end
+
+    local F=1/(E/3*math.tan(math.rad(b.FieldOfView/2))*2)*1000
+    local G=Vector2.new(F*a.BoxStaticXFactor,F*a.BoxStaticYFactor)
+
+    -- Color Logic
+    local H=a.BoxColor
+    if a.BeastCheck and n(C) then H=a.BeastColor
+    elseif a.TeamCheck then H=e.TeamColor==self.Player.TeamColor and a.AllyColor or a.EnemyColor end
+    if a.HighlightClosestPlayer and p()==self.Player then H=Color3.new(1,1,1) end
+
+    -- Box Positions
+    local I=l-G/2
+    local J=I+Vector2.new(G.X,0)
+    local K=I+Vector2.new(0,G.Y)
+    local L=I+G
+    local M={I,J,L,K}
+    for i=1,4 do
+        self.BoxLines[i].From=M[i]
+        self.BoxLines[i].To=M[i%4+1]
+        self.BoxLines[i].Color=H
+    end
+
+    -- Corners
+    local N=math.min(G.X,G.Y)/8
+    local O={{I,I+Vector2.new(N,0)},{I,I+Vector2.new(0,N)},{J,J+Vector2.new(-N,0)},{J,J+Vector2.new(0,N)},
+             {L,L+Vector2.new(-N,0)},{L,L+Vector2.new(0,-N)},{K,K+Vector2.new(N,0)},{K,K+Vector2.new(0,-N)}}
+    for i=1,8 do
+        self.Corners[i].From=O[i][1]
+        self.Corners[i].To=O[i][2]
+        self.Corners[i].Color=H
+        self.CornerOutlines[i].From=O[i][1]
+        self.CornerOutlines[i].To=O[i][2]
+    end
+
+    -- Name
+    self.Name.Position=Vector2.new(I.X+G.X/2,I.Y-15)
+    self.Name.Text=self.Player.Name
+    self.Name.Color=H
+
+    -- Tracer
+    local P=Vector2.new(b.ViewportSize.X/2,b.ViewportSize.Y)
+    local Q=Vector2.new(I.X+G.X/2,I.Y+G.Y)
+    self.TracerOutline.From=P
+    self.TracerOutline.To=Q
+    self.Tracer.From=P
+    self.Tracer.To=Q
+    self.Tracer.Color=H
+
+    -- View Tracer
+    if a.ViewTracerEnabled then
+        local head=C:FindFirstChild("Head") or u
+        if head then
+            local startPos,endPos=head.Position,head.Position+head.CFrame.LookVector*a.ViewTracerLength
+            local startScreen,_=b:WorldToViewportPoint(startPos)
+            local endScreen,_=b:WorldToViewportPoint(endPos)
+            self.ViewTracer.From=Vector2.new(startScreen.X,startScreen.Y)
+            self.ViewTracer.To=Vector2.new(endScreen.X,endScreen.Y)
+            self.ViewTracer.Color=H
+        end
+    end
+
+    -- Highlight
+    self.Highlight.Adornee=C
+    self.Highlight.FillColor=H
+    self.Highlight.OutlineColor=Color3.new(0,0,0)
+
+    -- Trail
+    if a.TrailEnabled then
+        self.Att0.Parent=u
+        self.Att1.Parent=u
+        self.Att0.CFrame=CFrame.new(0,a.TrailHeightOffset,0)
+        self.Att1.CFrame=CFrame.new(0,-a.TrailHeightOffset,0)
+        self.Trail.Attachment0=self.Att0
+        self.Trail.Attachment1=self.Att1
+        self.Trail.Parent=u
+        self.Trail.Color=ColorSequence.new(H)
+    end
+
+    self:SetVisible(true)
+end
+
+function y:Destroy()
+    for i=1,8 do
+        self.Corners[i]:Remove()
+        self.CornerOutlines[i]:Remove()
+    end
+    for i=1,4 do self.BoxLines[i]:Remove() end
+    self.Name:Remove()
+    self.Tracer:Remove()
+    self.TracerOutline:Remove()
+    if self.ViewTracer then self.ViewTracer:Remove() end
+    self.Highlight:Destroy()
+    self.Trail:Destroy()
+    self.Att0:Destroy()
+    self.Att1:Destroy()
+end
+
+
+local function R()
+    if not a.MasterSwitch then
+        for _,S in pairs(g) do S:SetVisible(false) end
+        return
+    end
+    for _,t in ipairs(d:GetPlayers()) do
+        if t~=e then
+            if not g[t] then g[t]=y.new(t) end
+            g[t]:Update()
+        end
+    end
+end
+
+d.PlayerRemoving:Connect(function(t)
+    if g[t] then g[t]:Destroy() g[t]=nil end
+end)
+
+d.PlayerAdded:Connect(function(t)
+    t.CharacterAdded:Connect(function() g[t]=y.new(t) end)
+end)
+
+c.RenderStepped:Connect(R)
+return a
