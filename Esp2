@@ -11,6 +11,8 @@ local a = {
     MaxDistance = 1000,
     TracerEnabled = false,
     NameEnabled = false,
+    font = 1,
+    TextSize = 14,
     HighlightClosestPlayer = false,
     TeamCheck = false,
     EnemyColor = Color3.fromRGB(255,0,0),
@@ -36,6 +38,8 @@ local a = {
     TrailHeightOffset = 1
 }
 getgenv().ESP = a
+
+
 
 local b = workspace.CurrentCamera
 local c = game:GetService("RunService")
@@ -104,7 +108,8 @@ function y.new(t)
 
     -- Name
     self.Name=Drawing.new("Text")
-    self.Name.Size=15
+    self.Name.Font = a.font 
+    self.Name.Size=a.TextSize
     self.Name.Center=true
     self.Name.Outline=true
 
@@ -213,7 +218,8 @@ function y:Update()
     self.Name.Position=Vector2.new(I.X+G.X/2,I.Y-15)
     self.Name.Text=self.Player.Name
     self.Name.Color=H
-
+    self.Name.Font = a.font 
+self.Name.Size = a.TextSize 
 
 
     -- Tracer
