@@ -20,14 +20,14 @@ local a = {
     BeastCheck = false,
     BeastColor = Color3.fromRGB(255,165,0),
     HighlightP = false,
-	HighlightTrans = 0.5,
+    HighlightTrans = 0.5,
     HighlightOutlineColour = Color3.fromRGB(255,0,0),
     OutlinesEnabled = true,
     CornerSize = 1,
     CornerThickness = 2,
     ViewTracerEnabled = false,
     ViewTracerLength = 10,
-    BoxMode = "Full", -- "Full", "Corners", "Both"
+    BoxMode = "Corners", -- "Full", "Corners", "Both"
 
     -- Trail ESP
     TrailEnabled = false,
@@ -35,12 +35,18 @@ local a = {
     TrailMinWidth = 0.5,
     TrailMaxWidth = 1,
     TrailTransparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0), NumberSequenceKeypoint.new(1,1)}),
-    TrailHeightOffset = 1
+    TrailHeightOffset = 1,
+
+    -- Glow Chams
+    GlowChamsEnabled = false,
+    GlowColor = Color3.fromRGB(255,255,255),
+    GlowMultiplier = 5,
+    GlowTransparency = 0.5,
+    GlowSizeOffset = Vector3.new(0.03,0.03,0.03)
 }
 getgenv().ESP = a
 
-
-
+--// Services
 local b = workspace.CurrentCamera
 local c = game:GetService("RunService")
 local d = game:GetService("Players")
@@ -48,6 +54,7 @@ local e = d.LocalPlayer
 local f = e:GetMouse()
 local g = {}
 
+--================== Functions ==================--
 local function j(k)
     local l,m=b:WorldToViewportPoint(k.Position)
     return Vector2.new(l.X,l.Y),m and l.Z>0,l.Z
@@ -135,6 +142,9 @@ function y.new(t)
     self.Highlight.OutlineTransparency=0
     self.Highlight.Parent=game:GetService("CoreGui")
 
+    -- Glow Chams
+    self.GlowChams = {}
+
     -- Trail ESP
     self.Att0=Instance.new("Attachment")
     self.Att1=Instance.new("Attachment")
@@ -152,6 +162,73 @@ function y.new(t)
     return self
 end
 
+--// Glow Chams Helpers
+local InstanceNew, CFrameNew, Vec3 = Instance.new, CFrame.new, Vector3.new
+
+local function RemoveAdorns(Part)
+    if not Part then return end
+    for _,Obj in ipairs(Part:GetChildren()) do
+        if Obj.Name == "Chams" or Obj.Name == "Glow" then
+            Obj:Destroy()
+        end
+    end
+end
+
+local function CreateAdornment(Part, Type, Color, Trans, ZIndex, SizeOffset, Extra)
+    Extra = Extra or {}
+    local Ad
+    if Type == "Cylinder" then
+        Ad = InstanceNew("CylinderHandleAdornment")
+        Ad.Height = Part.Size.Y + (Extra.HeightOffset or 0)
+        Ad.Radius = (Part.Size.X*0.5) + (Extra.RadiusOffset or 0)
+        Ad.CFrame = CFrameNew(Vec3(), Vec3(0,1,0))
+    elseif Type == "Box" then
+        Ad = InstanceNew("BoxHandleAdornment")
+        Ad.Size = Part.Size + (SizeOffset or Vec3(0,0,0))
+    end
+    Ad.Name = "Chams"
+    Ad.AlwaysOnTop = true
+    Ad.ZIndex = ZIndex
+    Ad.Adornee = Part
+    Ad.Color3 = Color
+    Ad.Transparency = Trans or 0
+    if Extra.Shading then Ad.Shading = Extra.Shading end
+    Ad.Parent = Part
+    return Ad
+end
+
+function y:UpdateGlowChams()
+    if not a.GlowChamsEnabled then return end
+    local Char = self.Player.Character
+    if not Char then return end
+    for _, Part in ipairs(Char:GetChildren()) do
+        if not Part:IsA("BasePart") or Part.Transparency>=1 then continue end
+        RemoveAdorns(Part)
+        local IsHead = Part.Name=="Head" or Part.Name=="FakeHead"
+        -- Glow
+        local Glow = CreateAdornment(
+            Part,
+            IsHead and "Cylinder" or "Box",
+            Color3.new(a.GlowColor.R*a.GlowMultiplier, a.GlowColor.G*a.GlowMultiplier, a.GlowColor.B*a.GlowMultiplier),
+            -1,
+            IsHead and 10 or 9,
+            a.GlowSizeOffset,
+            {Shading=Enum.AdornShading.XRayShaded}
+        )
+        table.insert(self.GlowChams, Glow)
+        -- Main part color
+        local Main = CreateAdornment(
+            Part,
+            IsHead and "Cylinder" or "Box",
+            a.GlowColor,
+            a.GlowTransparency,
+            10,
+            a.GlowSizeOffset
+        )
+        table.insert(self.GlowChams, Main)
+    end
+end
+
 function y:SetVisible(v)
     local fullVisible=v and a.BoxEnabled and (a.BoxMode=="Full" or a.BoxMode=="Both")
     local cornersVisible=v and a.BoxEnabled and (a.BoxMode=="Corners" or a.BoxMode=="Both")
@@ -166,6 +243,7 @@ function y:SetVisible(v)
     self.TracerOutline.Visible=v and a.TracerEnabled and a.OutlinesEnabled
     self.ViewTracer.Visible=v and a.ViewTracerEnabled
     self.Highlight.Enabled=v and a.HighlightP
+    if a.GlowChamsEnabled then self:UpdateGlowChams() end
     self.Trail.Enabled=v and a.TrailEnabled
 end
 
@@ -219,8 +297,7 @@ function y:Update()
     self.Name.Text=self.Player.Name
     self.Name.Color=H
     self.Name.Font = a.font 
-self.Name.Size = a.TextSize 
-
+    self.Name.Size = a.TextSize 
 
     -- Tracer
     local P=Vector2.new(b.ViewportSize.X/2,b.ViewportSize.Y)
@@ -279,9 +356,12 @@ function y:Destroy()
     self.Trail:Destroy()
     self.Att0:Destroy()
     self.Att1:Destroy()
+    for _,v in ipairs(self.GlowChams) do
+        if v and v.Parent then v:Destroy() end
+    end
 end
 
-
+--================ RENDER LOOP =================--
 local function R()
     if not a.MasterSwitch then
         for _,S in pairs(g) do S:SetVisible(false) end
